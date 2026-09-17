@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Контакт-трекер",
+    "slug": "contact-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.devlapino13.contacttracker",
+      "infoPlist": {
+        "NSContactsUsageDescription": "Приложению нужен доступ к контактам, чтобы показывать список и отслеживать, с кем вы давно не общались."
+      }
+    },
+    "android": {
+      "package": "com.devlapino13.contacttracker",
+      "permissions": ["READ_CONTACTS", "WRITE_CONTACTS"],
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Приложению нужен доступ к контактам, чтобы показывать список и отслеживать, с кем вы давно не общались."
+        }
+      ]
+    ]
+  }
+}
