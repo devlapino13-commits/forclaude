@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+firebird_export/
+firebird_export.zip
+export_result/
+export_result.zip
