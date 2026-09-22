@@ -22,8 +22,12 @@
 -- по какому правилу отсортирована каждая таблица.
 --
 -- Настройки ниже можно менять:
---   MAXROWS - сколько строк выгружать на таблицу (по умолчанию 100)
---   DO_MASK - 1: маскировать колонки с "чувствительными" именами, 0: не маскировать
+--   MAXROWS      - сколько строк выгружать на таблицу (по умолчанию 100)
+--   DO_MASK      - 1: маскировать колонки с "чувствительными" именами, 0: не маскировать
+--   LETTER_FILTER - если не пусто, выгружаются только таблицы, чьё имя
+--                    начинается с этой буквы/строки (регистр не важен),
+--                    например 'C' - только таблицы на букву C.
+--                    Пустая строка '' - выгружать все таблицы.
 --
 -- Таблицы с именем, начинающимся на "UX$" (служебные таблицы IBExpert),
 -- в выгрузку не включаются.
@@ -54,15 +58,18 @@ AS
     DECLARE VARIABLE CUR_SCORE    SMALLINT;
     DECLARE VARIABLE PK_COL       VARCHAR(63);
     DECLARE VARIABLE ORDER_COL    VARCHAR(63);
+    DECLARE VARIABLE LETTER_FILTER VARCHAR(63);
 BEGIN
     MAXROWS = 100;
     DO_MASK = 1;
+    LETTER_FILTER = 'C';  -- напр. 'C' - только таблицы на букву C; '' - все таблицы
 
     FOR SELECT TRIM(RDB$RELATION_NAME)
         FROM RDB$RELATIONS
         WHERE (RDB$SYSTEM_FLAG IS NULL OR RDB$SYSTEM_FLAG = 0)
           AND RDB$VIEW_BLR IS NULL
           AND RDB$RELATION_NAME NOT STARTING WITH 'UX$'
+          AND (LETTER_FILTER = '' OR UPPER(RDB$RELATION_NAME) STARTING WITH UPPER(LETTER_FILTER))
         ORDER BY 1
         INTO :REL_NAME
     DO
