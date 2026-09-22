@@ -24,6 +24,9 @@
 -- Настройки ниже можно менять:
 --   MAXROWS - сколько строк выгружать на таблицу (по умолчанию 100)
 --   DO_MASK - 1: маскировать колонки с "чувствительными" именами, 0: не маскировать
+--
+-- Таблицы с именем, начинающимся на "UX$" (служебные таблицы IBExpert),
+-- в выгрузку не включаются.
 -- ============================================================================
 
 EXECUTE BLOCK
@@ -59,6 +62,7 @@ BEGIN
         FROM RDB$RELATIONS
         WHERE (RDB$SYSTEM_FLAG IS NULL OR RDB$SYSTEM_FLAG = 0)
           AND RDB$VIEW_BLR IS NULL
+          AND RDB$RELATION_NAME NOT STARTING WITH 'UX$'
         ORDER BY 1
         INTO :REL_NAME
     DO
