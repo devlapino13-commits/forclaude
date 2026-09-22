@@ -1,0 +1,1080 @@
+create or alter function f_get_const (
+    const_name d_str_255)
+returns d_str_255 deterministic
+as
+declare variable res_text d_str_255;
+declare variable db_id d_integer;
+begin
+  db_id = f_get_db_id();
+
+  res_text = '$_Unknown_$';
+
+  if (db_id = 81001) then
+  begin
+    res_text = (case const_name
+                  when 'cm_default_currency' then '810'
+                  when 'operbook_kind' then 1
+                  when 'check_info_kind' then '1' -- в зависимости 0 или 1, будет открываться старое или новое окно проверки данных в КК
+                  when 'html_font_name' then 'Calibri Light' -- Шрифт отображаемый при просмотре HTML (MainForm.ShowHTML)
+                  when 'moneta_acc' then '65562035'
+                  when 'moneta_oivo_acc' then '47582496'
+                  when 'wirebank_acc' then '16378'
+                  when 'wirebank_oivo_acc' then '16834'
+                  when 'test_c_id' then '1010100254158'
+                  when 'new_contdata' then 0  -- работаем по ContData (новая структура) или ContInfo (старая структура)
+                  when 'new_clientdocs' then 1 -- работа с ClientDocs через механизм Docrecog (новая форма)
+                  when 'company_cell' then '89037676000' -- Сотовый номер компании для входящих смс
+                  when 'new_reschedule' then '1' -- Применять новое окно реструктуризации
+                  when 'blank_default_lang' then 'ru' -- Язык по умолчанию для бланков
+                  when 'edoc_new_mode' then '1' -- Использовать новую структуре eDoc
+                  else '$_Unknown_$'
+                end);
+  end
+
+  if (db_id = 41701) then
+  begin
+    res_text = (case const_name
+                  when 'cm_default_currency' then '417'
+                  when 'operbook_kind' then 0
+                  when 'check_info_kind' then '0'
+                  when 'html_font_name' then 'Calibri Light' -- Шрифт отображаемый при просмотре HTML (MainForm.ShowHTML)
+                  when 'new_contdata' then 0
+                  when 'new_clientdocs' then 1 -- работа с ClientDocs через механизм Docrecog (новая форма)
+                  when 'company_cell' then '+996220600600' -- Сотовый номер компании для входящих смс
+                  when 'new_reschedule' then '1' -- Применять новое окно реструктуризации
+                  when 'blank_default_lang' then 'ru' -- Язык по умолчанию для бланков
+                  when 'edoc_new_mode' then '1' -- Использовать новую структуре eDoc
+                  else '$_Unknown_$'
+                end);
+  end
+
+  if (db_id = 39801) then
+  begin
+    res_text = (case const_name
+                  when 'cm_default_currency' then '398'
+                  when 'operbook_kind' then 0
+                  when 'check_info_kind' then '0'
+                  when 'html_font_name' then 'Calibri Light' -- Шрифт отображаемый при просмотре HTML (MainForm.ShowHTML)
+                  when 'new_contdata' then 0
+                  when 'new_clientdocs' then 1 -- работа с ClientDocs через механизм Docrecog (новая форма)
+                  when 'company_cell' then '' -- Сотовый номер компании для входящих смс
+                  when 'new_reschedule' then '1' -- Применять новое окно реструктуризации
+                  when 'blank_default_lang' then 'ru' -- Язык по умолчанию для бланков
+                  when 'edoc_new_mode' then '1' -- Использовать новую структуре eDoc
+                  when 'processing_kz_acc' then '00000000000777' -- счет processing kz
+                  else '$_Unknown_$'
+                end);
+  end
+
+  if (db_id = 94401) then
+  begin
+    res_text = (case const_name
+                  when 'cm_default_currency' then '944'
+                  when 'operbook_kind' then 0
+                  when 'check_info_kind' then '0'
+                  when 'html_font_name' then 'Calibri Light' -- Шрифт отображаемый при просмотре HTML (MainForm.ShowHTML)
+                  when 'new_contdata' then 0
+                  when 'new_clientdocs' then 0 -- работа с ClientDocs через механизм Docrecog (новая форма)
+                  when 'company_cell' then '+994552222059' -- Сотовый номер компании для входящих смс
+                  when 'new_reschedule' then '1' -- Применять новое окно реструктуризации
+                  when 'blank_default_lang' then 'az' -- Язык по умолчанию для бланков
+                  when 'edoc_new_mode' then '1' -- Использовать новую структуре eDoc
+                  else '$_Unknown_$'
+                end);
+  end
+
+  if (res_text = '$_Unknown_$') then
+  begin
+    -- если значение выше не найдено, ищем среди констант в таблице
+    select cv_value
+    from const_var
+    where cv_code = :const_name
+    into res_text;
+
+    if (row_count = 0) then
+      exception e_default 'Unknown constant name: ' || const_name || ' in db_id: ' || db_id;
+  end
+
+  return res_text;
+end
+
+create or alter procedure hp_do_disbursement_card (
+    rep_k_id d_id,
+    un_id d_id)
+returns (
+    error_text d_str_8100)
+as
+declare variable db_id d_integer;
+declare variable disb_kind d_integer;
+declare variable manager_id d_id;
+declare variable cashier_id d_id;
+declare variable disb_account d_str_20;
+declare variable res_ol_ids d_str_100;
+declare variable c_id d_id;
+declare variable card_id d_str_100;
+declare variable c_name_fio d_str_100;
+declare variable kolich_client_approved d_smallint;
+declare variable is_online d_smallint;
+declare variable amount_approved curr_type;
+declare variable go_reg_id d_integer;
+declare variable fpb_code d_str_code;
+declare variable cell_no d_str_code;
+declare variable disb_date d_date;
+declare variable is_oivo d_bool;
+declare variable is_business boolean;
+declare variable bank_bik d_str_10;
+declare variable client_account d_str_20;
+declare variable client_inn d_str_20;
+declare variable al_account varchar(32);
+begin
+  -- Процедура отвечает за выдачу на карту/СБП/расчетный счет
+  error_text = '';
+
+  if (un_id is null) then
+  begin
+    error_text = 'UN_ID не передан';
+    suspend;
+    exit;
+  end
+
+  db_id = f_get_db_id();
+  go_reg_id = f_hq_id(db_id);
+
+  is_oivo = 0;
+  select k_disb_kind,
+         k_approved_manager,
+         k_kolich_client_approved,
+         coalesce(k_is_online, 0),
+         k_amount_approved,
+         k_disb_date,
+         iif(pr_code containing '.oivo_pack.', 1, 0),
+         pr_code containing '.business.'
+  from kontract, product
+  where k_id = :rep_k_id
+    and k_from_pr_id = pr_id
+  into disb_kind,
+       manager_id,
+       kolich_client_approved,
+       is_online,
+       amount_approved,
+       disb_date,
+       is_oivo,
+       is_business;
+  manager_id = coalesce(manager_id, 0);
+
+  if (disb_date <> current_date and rep_k_id <> coalesce(rdb$get_context('USER_TRANSACTION', 'MOVE_DISB_K_ID'), 0)) then
+  begin
+    error_text = 'Дата выдачи в договоре отличается от текущей даты. Выдача запрещена.';
+    suspend;
+    exit;
+  end
+
+  if (db_id in (39801, 41701) and disb_kind = 6) then
+  begin
+    -- карта МБулак
+    error_text = (select err_text from hp_do_disbursement_card_mb(:rep_k_id, :un_id));
+    suspend;
+    exit;
+  end
+
+  -- Получаем казначея -- >
+  cashier_id = 0;
+  select kc_from_c_id
+  from knclient
+  where kc_from_k_id = :rep_k_id and
+        kc_status = 2 and
+        kc_amount_approved > 0 rows 1
+  into cashier_id;
+  if (cashier_id is null) then
+    cashier_id = 0;
+  if (cashier_id = 0) then
+  begin
+    select kc_from_c_id
+    from knclient
+    where kc_from_k_id = :rep_k_id and
+          kc_amount_approved > 0 rows 1
+    into cashier_id;
+  end
+
+  cashier_id = coalesce(cashier_id, 0);
+  ------------------------- <
+
+  if (db_id = 81001) then
+  begin
+    if (kolich_client_approved > 1) then
+        error_text = error_text || 'В договоре более одного участника; ';
+
+    if (is_online = 0) then
+        error_text = error_text || 'Тип выдачи займа - оффлайн; ';
+
+    -- RFCRU-5556
+    if (is_business) then
+    begin
+      if (extract(weekday from current_date) in (0,6) or
+        (cast(current_time as time) >= time'16:55' or cast(current_time as time) < time'03:00')) then
+      begin
+        error_text = 'Перевод на карту по продукту "Бизнес" запрещен в выходные дни и в период c 16:55 по 03:00 в будни.';
+        suspend;
+        exit;
+      end
+    end
+  end
+
+  if ((db_id in (39801, 41701) and disb_kind not in (5, 6)) or (db_id = 81001 and disb_kind not in (5, 7, 8))) then
+  begin
+    error_text = error_text || 'Способ выдачи займа - не выдача на карту/СБП/расчетный счет; ';
+  end
+
+
+  for select kc_from_c_id
+  from knclient
+  where kc_from_k_id = :rep_k_id
+  and kc_amount_approved > 0
+  into c_id
+  do
+  begin
+    if (db_id = 81001 and disb_kind = 7) then
+    begin
+      -- Проверяем, что банк и номер телефона для выдачи указаны
+      select fpb_code, cell_no
+      from hp_fps_get_loan_bank(:rep_k_id, :c_id)
+      into fpb_code, cell_no;
+
+      if (fpb_code is null or cell_no is null ) then
+        error_text = error_text || 'У клиента [' || c_name_fio || '] не указан банк/телефон для перевода по СБП; ';
+    end
+    else if (db_id = 81001 and disb_kind = 8) then
+    begin
+      -- Проверяем, что банк и расчетный счет указан
+      select bank_bik, client_account, client_inn
+      from hp_bankacc_get_info(:rep_k_id, :c_id)
+      into bank_bik, client_account, client_inn;
+
+      if (coalesce(bank_bik, '') = '' or
+          coalesce(client_account, '') = '' or
+          coalesce(client_inn, '') = '') then
+        error_text = error_text || 'У клиента [' || c_name_fio || '] не указан банк или расчетный счет или ИНН для выдачи на банковский счет; ';
+    end
+    else
+    begin
+      -- получаю последнюю активную карту клиента
+      select token
+      from hp_client_bank_card(:c_id)
+      into card_id;
+    
+      if (card_id is null) then
+      begin
+        select c_name_fio
+        from clients
+        where c_id = :c_id
+        into c_name_fio;
+    
+        error_text = error_text || 'У клиента ['||c_name_fio||'] не закреплена карта; ';
+      end
+    end
+  end
+
+  if (error_text <> '') then
+  begin
+    suspend;
+    exit;
+  end
+
+  if (db_id = 41701) then -- Элькарт
+  begin
+      select al_id
+      from acc_list
+      where al_from_reg_id = :go_reg_id and
+            al_account = '10004/2'
+      into disb_account;
+
+      select res_ol_ids, res_text
+      from hp_do_disbursement(:un_id, :rep_k_id, :go_reg_id, :disb_kind, :disb_account, :go_reg_id, :disb_kind, :disb_account, :cashier_id, :manager_id)
+      into :res_ol_ids, error_text;
+    
+      res_ol_ids = coalesce(res_ol_ids, '');
+    
+      if (res_ol_ids <> '') then
+        execute procedure elcard_do_disbursement(:rep_k_id);
+  end
+  if (db_id = 81001) then -- Монета
+  begin
+      -- 51-01/18 Монета
+      -- 51-01/24 Oivo
+      -- 51-01/25 Wirebank(ТКБ)
+      -- 51-01/26 Oivo Wirebank(ТКБ)
+      
+      -- выдачи по ТКБ только через СБП 
+      if (f_get_const('edoc_pmt_project_disb') = 'wirebank' and disb_kind = 7) then 
+      begin
+        al_account = '51-01/25';
+
+        if (is_oivo = 1) then
+          al_account = '51-01/26';
+      end
+      else
+      begin
+        al_account = '51-01/18';
+
+        if (is_oivo = 1) then
+          al_account = '51-01/24';
+      end
+
+      select al_id
+      from acc_list
+      where al_from_reg_id = :go_reg_id and
+            al_account = :al_account
+      into disb_account;
+
+      select res_ol_ids, res_text
+      from hp_do_disbursement(:un_id, :rep_k_id, :go_reg_id, :disb_kind, :disb_account, :go_reg_id, :disb_kind, :disb_account, :cashier_id, :manager_id)
+      into :res_ol_ids, error_text;
+    
+      res_ol_ids = coalesce(res_ol_ids, '');
+    
+      if (res_ol_ids <> '') then
+        execute procedure moneta_do_disbursement(:rep_k_id, :c_id, :amount_approved);
+  end
+  suspend;
+end
+
+create or alter procedure wirebank_operbook_create (
+    esm_id id_type)
+as
+declare variable esm_date date;
+declare variable k_kontract_no str_100;
+declare variable id_no id_type;
+declare variable ol_id id_type;
+declare variable amount curr_type;
+declare variable ob_memo varchar(1024);
+declare variable acc_dt varchar(20);
+declare variable acc_kt varchar(20);
+declare variable esa_message d_blob_text;
+declare variable doc_no integer;
+declare variable acc_dt_id d_id;
+declare variable acc_kt_id d_id;
+declare variable k_id d_id;
+declare variable is_oivo d_bool;
+declare variable hq_reg_id d_integer;
+begin
+  esa_message = '';
+  hq_reg_id = f_hq_id();
+
+  select ea.esa_message, em.esm_date, em.esm_from_k_id
+  from extsysanswer ea
+  inner join extsysmain em on em.esm_id = ea.esa_from_esm_id
+  where ea.esa_from_esm_id = :esm_id and
+        ea.esa_message starting 'answer:'
+  into :esa_message, :esm_date, k_id;
+
+  k_kontract_no = '';
+  is_oivo = 0;
+
+  select k_kontract_no, iif(pr_code containing '.oivo_pack.', 1, 0)
+  from kontract, product
+  where k_id = :k_id and
+        k_from_pr_id = pr_id
+  into k_kontract_no, is_oivo;
+
+  if (position('sourceamountfee' in :esa_message) <= 0) then
+    exit;
+
+  select -cast(f_json_blob_get_value(substring(esa_message from char_length('answer:') + 1), 'attrs.sourceamountfee', 0) as curr_type)
+  from extsysanswer
+  where esa_from_esm_id = :esm_id
+  into :amount;
+
+  select kv
+  from get_kv(:hq_reg_id, 5)
+  into :id_no;
+
+  select num
+  from last_doc_number(:esm_date, 9, :hq_reg_id)
+  into :doc_no;
+
+  ol_id = :id_no;
+
+  ob_memo = 'Ком. за выдачу займа ' || k_kontract_no || ' со счета ' || iif(is_oivo = 1, f_get_const('wirebank_oivo_acc'), f_get_const('wirebank_acc'));
+
+  insert into operlist (ol_id, ol_doc_no, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind, ol_memo, ol_status,
+                        is_delete, ol_user_id)
+  values (:ol_id, :doc_no, :hq_reg_id, 2, :esm_date, 9,
+          'Комиссия за выдачу через ТКБ ПАО', 0, 0, 1000000000000);
+
+  select al_id
+  from acc_list
+  where al_from_reg_id = :hq_reg_id and
+        al_account = '91-02/3'
+  into acc_dt;
+
+  -- Счет комиссии берем отдельно, не из acc_list т.к. на 91-02/3 много привязанных счетов ЕПС
+  acc_dt_id = f_get_acc_id('71702810005310370101'); -- Комиссия по Wirebank(ТКБ)
+
+  -- 51-01/25 Wirebank(ТКБ)
+  -- 51-01/26 Oivo
+  select al_id, al_from_acc_id
+  from acc_list
+  where al_from_reg_id = :hq_reg_id and
+        al_account = iif(:is_oivo = 1, '51-01/26', '51-01/25')
+  into :acc_kt, acc_kt_id;
+
+  insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, ob_summa_val,
+                        ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, ob_detail,
+                        ob_from_sac_id)
+  values (:ol_id, 1, '810', 1, null, :acc_dt, :amount, :amount, null, null, null, :acc_kt, null, :ob_memo, null);
+
+  if (acc_dt_id is not null and
+      acc_kt_id is not null) then
+  begin
+    execute procedure hp_do_kn_operbook_ins(:ol_id, null, :acc_dt_id, :acc_kt_id, null, null, :amount, 0, :amount,
+        :esm_date, :hq_reg_id, 1, 'Комиссия за выдачу через ТКБ ПАО');
+  end
+
+  insert into extsysanswer (esa_from_esm_id, esa_message)
+  values (:esm_id, 'ol_id = ' || :ol_id);
+end
+
+create or alter procedure hp_do_kn_operbook_ins (
+    kob_from_ol_id d_id,
+    kob_from_kc_id d_id,
+    kob_acc_dt d_id,
+    kob_acc_kt d_id,
+    kob_minus_acc_dt d_id,
+    kob_minus_acc_kt d_id,
+    kob_summa d_currency,
+    kob_summa_val d_currency,
+    kob_summa_tax d_currency,
+    kob_ol_date d_date,
+    kob_ol_reg_id d_integer,
+    kob_ol_is_active d_integer,
+    kob_detail_str d_str_255,
+    kob_summa_kind d_smallint = 0,
+    kob_allow_minus d_integer = 1,
+    kob_client_dt d_id = null,
+    kob_client_kt d_id = null,
+    kob_currency d_str_lang = null,
+    kob_curr_rate d_currency = null)
+as
+declare variable kob_detail_id decimal(18,0);
+declare variable saldo_sum curr_type;
+declare variable saldo_val curr_type;
+declare variable saldo_tax curr_type;
+declare variable tmp_sum curr_type;
+declare variable tmp_val curr_type;
+declare variable tmp_tax curr_type;
+declare variable tmp_id id_type;
+declare variable acc_type integer;
+declare variable dt_pair_dt_acc id_type;
+declare variable dt_pair_kt_acc id_type;
+declare variable dt_amount_sum curr_type;
+declare variable dt_amount_val curr_type;
+declare variable dt_amount_tax curr_type;
+declare variable kt_amount_tax curr_type;
+declare variable kt_pair_dt_acc id_type;
+declare variable kt_pair_kt_acc id_type;
+declare variable kt_amount_sum curr_type;
+declare variable kt_amount_val curr_type;
+declare variable tmp_acc_id id_type;
+declare variable pair_acc id_type;
+declare variable tax_kind_dt d_smallint;
+declare variable tax_kind_kt d_smallint;
+declare variable kob_summa_tax_dt curr_type;
+declare variable kob_summa_tax_kt curr_type;
+declare variable tmp_tax_dt curr_type;
+declare variable tmp_tax_kt curr_type;
+declare variable saldo_tax_dt curr_type;
+declare variable saldo_tax_kt curr_type;
+begin
+  -- процедура для сохранения одной строки проводки в новом плане счетов
+  -- если значения параметра kob_summa_kind:
+  -- 0, значит это сумма проводки.
+  -- 1 - значит это сумма остатка ДТ счета после сохранения проводки.
+  -- -1 - значит это сумма остатка КТ счета после сохранения проводки.
+  -- 2 - значит общий оборот за день должен быть равен указанной сумме
+  -- при значении <> 0, вычисляется текущий остаток на дату и на разницу строится проводка
+
+  dt_pair_dt_acc = null;
+  dt_pair_kt_acc = null;
+
+  kob_summa_tax_dt = kob_summa_tax;
+  kob_summa_tax_kt = kob_summa_tax;
+
+  if (kob_detail_str is null) then
+    kob_detail_str = '';
+  kob_detail_str = trim(kob_detail_str);
+
+  if (kob_curr_rate is null) then
+    kob_curr_rate = 1;
+
+  if (coalesce(kob_currency, '') = '') then
+  begin
+    select cm_default_currency
+    from company
+    into kob_currency;
+    kob_curr_rate = 1;
+  end
+
+  tax_kind_dt = 2;
+  tax_kind_kt = 2;
+
+  if (kob_curr_rate = 0) then
+    kob_curr_rate = 1;
+  if (kob_curr_rate = 1) then
+    kob_summa_val = 0;
+
+  if (kob_ol_is_active is null or
+      kob_ol_date is null) then
+  begin
+    select ol_date, 1 - coalesce(is_delete, 0)
+    from operlist
+    where ol_id = :kob_from_ol_id
+    into kob_ol_date, kob_ol_is_active;
+  end
+
+  if (kob_summa_kind is null) then
+    kob_summa_kind = 0;
+  if (kob_summa is null) then
+    kob_summa = 0;
+  if (kob_summa_val is null) then
+    kob_summa_val = 0;
+  if (kob_summa_tax_dt is null) then
+    kob_summa_tax_dt = 0;
+  if (kob_summa_tax_kt is null) then
+    kob_summa_tax_kt = 0;
+
+  -- нулевые проводки не сохраняем
+  if (kob_summa_kind = 0 and
+      kob_summa = 0 and
+      kob_summa_val = 0 and
+      kob_summa_tax_dt = 0 and
+      kob_summa_tax_kt = 0) then
+    exit;
+
+  if (kob_allow_minus is null) then
+    kob_allow_minus = 1;
+
+  pair_acc = null;
+  if (kob_summa_kind = -1) then
+  begin
+    select acc_type, iif(ab_pair_kind = 1, null, acc_pair_acc_id)
+    from ref_account, ref_accbalance
+    where acc_id = :kob_acc_kt and
+          acc_from_ab_id = ab_id
+    into :acc_type, :pair_acc;
+
+    saldo_sum = 0;
+    saldo_val = 0;
+    saldo_tax = 0;
+    select kobs_bal_sum, kobs_bal_val, kobs_bal_tax
+    from kn_obsummary
+    where kobs_acc_id = :kob_acc_kt and
+          kobs_date <= :kob_ol_date
+    order by kobs_acc_id desc, kobs_date desc
+    rows 1
+    into saldo_sum, saldo_val, saldo_tax;
+
+    if (saldo_sum is null) then
+      saldo_sum = 0;
+    if (saldo_val is null) then
+      saldo_val = 0;
+    if (saldo_tax is null) then
+      saldo_tax = 0;
+
+    if (pair_acc is not null) then
+    begin
+      tmp_sum = 0;
+      tmp_val = 0;
+      tmp_tax = 0;
+
+      select kobs_bal_sum, kobs_bal_val, kobs_bal_tax
+      from kn_obsummary
+      where kobs_acc_id = :pair_acc and
+            kobs_date <= :kob_ol_date
+      order by kobs_acc_id desc, kobs_date desc
+      rows 1
+      into tmp_sum, tmp_val, tmp_tax;
+
+      if (tmp_sum is null) then
+        tmp_sum = 0;
+      if (tmp_val is null) then
+        tmp_val = 0;
+      if (tmp_tax is null) then
+        tmp_tax = 0;
+
+      saldo_sum = saldo_sum + tmp_sum;
+      saldo_val = saldo_val + tmp_val;
+      saldo_tax = saldo_tax + tmp_tax;
+    end
+    -- меняем знак текущего остатка, так как остаток по КТ идет с минусом
+    saldo_sum = -saldo_sum;
+    saldo_val = -saldo_val;
+    saldo_tax = -saldo_tax;
+
+    kob_summa = kob_summa - saldo_sum;
+    kob_summa_val = kob_summa_val - saldo_val;
+    kob_summa_tax_dt = kob_summa_tax_dt - saldo_tax;
+    kob_summa_tax_kt = kob_summa_tax_kt - saldo_tax;
+  end
+
+  if (kob_summa_kind = 1) then
+  begin
+    pair_acc = null;
+    select acc_type, iif(ab_pair_kind = 1, null, acc_pair_acc_id)
+    from ref_account, ref_accbalance
+    where acc_id = :kob_acc_dt and
+          acc_from_ab_id = ab_id
+    into :acc_type, :pair_acc;
+
+    saldo_sum = 0;
+    saldo_val = 0;
+    saldo_tax = 0;
+    select kobs_bal_sum, kobs_bal_val, kobs_bal_tax
+    from kn_obsummary
+    where kobs_acc_id = :kob_acc_dt and
+          kobs_date <= :kob_ol_date
+    order by kobs_acc_id desc, kobs_date desc
+    rows 1
+    into saldo_sum, saldo_val, saldo_tax;
+
+    if (saldo_sum is null) then
+      saldo_sum = 0;
+    if (saldo_val is null) then
+      saldo_val = 0;
+    if (saldo_tax is null) then
+      saldo_tax = 0;
+
+    if (pair_acc is not null) then
+    begin
+      tmp_sum = 0;
+      tmp_val = 0;
+      tmp_tax = 0;
+      select kobs_bal_sum, kobs_bal_val, kobs_bal_tax
+      from kn_obsummary
+      where kobs_acc_id = :pair_acc and
+            kobs_date <= :kob_ol_date
+      order by kobs_acc_id desc, kobs_date desc
+      rows 1
+      into tmp_sum, tmp_val, tmp_tax;
+
+      if (tmp_sum is null) then
+        tmp_sum = 0;
+      if (tmp_val is null) then
+        tmp_val = 0;
+      if (tmp_tax is null) then
+        tmp_tax = 0;
+
+      saldo_sum = saldo_sum + tmp_sum;
+      saldo_val = saldo_val + tmp_val;
+      saldo_tax = saldo_tax + tmp_tax;
+    end
+
+    kob_summa = kob_summa - saldo_sum;
+    kob_summa_val = kob_summa_val - saldo_val;
+    kob_summa_tax_dt = kob_summa_tax_dt - saldo_tax;
+    kob_summa_tax_kt = kob_summa_tax_kt - saldo_tax;
+  end
+
+  if (kob_summa_kind = 2) then
+  begin
+    saldo_sum = 0;
+    saldo_val = 0;
+    saldo_tax_dt = 0;
+    saldo_tax_kt = 0;
+
+    tmp_sum = 0;
+    tmp_val = 0;
+    tmp_tax = 0;
+    select sum(kob_summa), sum(kob_summa_val), sum(kob_summa_tax_dt), sum(kob_summa_tax_kt)
+    from kn_operbook
+    where kob_acc_dt = :kob_acc_dt and
+          kob_acc_kt = :kob_acc_kt and
+          kob_ol_date = :kob_ol_date and
+          kob_ol_is_active = 1
+    into tmp_sum, tmp_val, tmp_tax_dt, tmp_tax_kt;
+
+    if (tmp_sum is null) then
+      tmp_sum = 0;
+    if (tmp_val is null) then
+      tmp_val = 0;
+    if (tmp_tax_dt is null) then
+      tmp_tax_dt = 0;
+    if (tmp_tax_kt is null) then
+      tmp_tax_kt = 0;
+    saldo_sum = saldo_sum + tmp_sum;
+    saldo_val = saldo_val + tmp_val;
+    saldo_tax_dt = saldo_tax_dt + tmp_tax_dt;
+    saldo_tax_kt = saldo_tax_kt + tmp_tax_kt;
+
+    tmp_sum = 0;
+    tmp_val = 0;
+    tmp_tax_dt = 0;
+    tmp_tax_kt = 0;
+    select sum(kob_summa), sum(kob_summa_val), sum(kob_summa_tax_dt), sum(kob_summa_tax_kt)
+    from kn_operbook
+    where kob_acc_dt = iif(:kob_minus_acc_kt is not null, :kob_minus_acc_kt, :kob_acc_kt) and
+          kob_acc_kt = iif(:kob_minus_acc_dt is not null, :kob_minus_acc_dt, :kob_acc_dt) and
+          kob_ol_date = :kob_ol_date and
+          kob_ol_is_active = 1
+    into tmp_sum, tmp_val, tmp_tax_dt, tmp_tax_kt;
+
+    if (tmp_sum is null) then
+      tmp_sum = 0;
+    if (tmp_val is null) then
+      tmp_val = 0;
+    if (tmp_tax_dt is null) then
+      tmp_tax_dt = 0;
+    if (tmp_tax_kt is null) then
+      tmp_tax_kt = 0;
+    saldo_sum = saldo_sum - tmp_sum;
+    saldo_val = saldo_val - tmp_val;
+    saldo_tax_dt = saldo_tax_dt - tmp_tax_dt;
+    saldo_tax_kt = saldo_tax_kt - tmp_tax_kt;
+
+    kob_summa = kob_summa - saldo_sum;
+    kob_summa_val = kob_summa_val - saldo_val;
+    kob_summa_tax_dt = kob_summa_tax_dt - saldo_tax_dt;
+    kob_summa_tax_kt = kob_summa_tax_kt - saldo_tax_kt;
+
+    -- нулевые проводки не сохраняем
+    if (kob_summa = 0 and
+        kob_summa_val = 0 and
+        kob_summa_tax_dt = 0 and
+        kob_summa_tax_kt = 0) then
+      exit;
+  end
+
+  if (kob_allow_minus = 0 and
+      kob_summa < 0 and
+      kob_summa_kind in (-1, 0, 1)) then
+  begin
+    if (kob_summa_kind = -1 and
+        kob_minus_acc_dt is not null) then
+      kob_acc_dt = kob_minus_acc_dt;
+    if (kob_summa_kind = 1 and
+        kob_minus_acc_kt is not null) then
+      kob_acc_kt = kob_minus_acc_kt;
+
+    tmp_id = kob_acc_dt;
+    kob_acc_dt = kob_acc_kt;
+    kob_acc_kt = tmp_id;
+
+    tmp_id = kob_client_dt;
+    kob_client_dt = kob_client_kt;
+    kob_client_kt = tmp_id;
+
+    kob_summa_kind = -kob_summa_kind;
+
+    kob_summa = -kob_summa;
+    kob_summa_val = -kob_summa_val;
+    kob_summa_tax_dt = -kob_summa_tax_dt;
+    kob_summa_tax_kt = -kob_summa_tax_kt;
+  end
+
+  dt_amount_sum = 0;
+  dt_amount_val = 0;
+  dt_amount_tax = 0;
+
+  kt_amount_sum = 0;
+  kt_amount_val = 0;
+  kt_amount_tax = 0;
+
+  pair_acc = null;
+  select acc_type, iif(ab_pair_kind = 1, null, acc_pair_acc_id),
+         coalesce(sab_tax_kind, coalesce(ab_tax_kind, 0))
+  from ref_account, ref_accbalance, sys_accbalance
+  where acc_id = :kob_acc_dt and
+        acc_from_ab_id = ab_id and
+        acc_from_sab_id = sab_id
+  into :acc_type, :pair_acc, :tax_kind_dt;
+
+  -- Правила для парных счетов:
+  -- В проводках приоритетно берем тот счет, где имеется остаток
+  -- Если в обоих счетах нет остатка, то:
+  --   Если счет участвует в Дт, берем активный счет
+  --   Иначе берем пассивный счет
+
+  -- если по Дебету идет парный счет, проверяем
+  if (pair_acc is not null) then
+  begin
+    tmp_sum = 0;
+    tmp_val = 0;
+    tmp_tax = 0;
+    select kobs_bal_sum, kobs_bal_val, kobs_bal_tax
+    from kn_obsummary
+    where kobs_acc_id = :kob_acc_dt and
+          kobs_date <= :kob_ol_date
+    order by kobs_acc_id desc, kobs_date desc
+    rows 1
+    into tmp_sum, tmp_val, tmp_tax;
+
+    -- если по этому счету нет остатка, проверяем дальше
+    if (tmp_sum = 0 and
+        tmp_val = 0 and
+        tmp_tax = 0) then
+    begin
+      select kobs_bal_sum, kobs_bal_val, kobs_bal_tax
+      from kn_obsummary
+      where kobs_acc_id = :pair_acc and
+            kobs_date <= :kob_ol_date
+      order by kobs_acc_id desc, kobs_date desc
+      rows 1
+      into tmp_sum, tmp_val, tmp_tax;
+
+      -- если прилетел пассивный счет, меняем его на активный (парный)
+      if (acc_type = 1) then
+      begin
+        tmp_acc_id = kob_acc_dt;
+        kob_acc_dt = pair_acc;
+        pair_acc = tmp_acc_id;
+        acc_type = 0;
+      end
+      else
+      begin
+        -- иначе проверяем, если у парного есть остаток, меняем Дт счет на парный.
+        if (tmp_sum <> 0 or
+            tmp_val <> 0 or
+            tmp_tax <> 0) then
+        begin
+          tmp_acc_id = kob_acc_dt;
+          kob_acc_dt = pair_acc;
+          pair_acc = tmp_acc_id;
+          acc_type = 1 - acc_type;
+        end
+      end
+    end
+
+    if (acc_type = 0) then
+    begin
+      if (tmp_sum + kob_summa < 0) then
+      begin
+        dt_pair_dt_acc = kob_acc_dt;
+        dt_pair_kt_acc = pair_acc;
+        dt_amount_sum = -(tmp_sum + kob_summa);
+        dt_amount_val = -(tmp_val + kob_summa_val);
+        dt_amount_tax = -(tmp_tax + kob_summa_tax_dt);
+      end
+    end
+
+    if (acc_type = 1) then
+    begin
+      if (tmp_sum + kob_summa > 0) then
+      begin
+        dt_pair_dt_acc = pair_acc;
+        dt_pair_kt_acc = kob_acc_dt;
+        dt_amount_sum = (tmp_sum + kob_summa);
+        dt_amount_val = (tmp_val + kob_summa_val);
+        dt_amount_tax = (tmp_tax + kob_summa_tax_dt);
+      end
+    end
+  end
+
+  pair_acc = null;
+  select acc_type, iif(ab_pair_kind = 1, null, acc_pair_acc_id),
+         coalesce(sab_tax_kind, coalesce(ab_tax_kind, 0))
+  from ref_account, ref_accbalance, sys_accbalance
+  where acc_id = :kob_acc_kt and
+        acc_from_ab_id = ab_id and
+        acc_from_sab_id = sab_id
+  into :acc_type, :pair_acc, :tax_kind_kt;
+
+  -- если по Кредит идет парный счет, проверяем
+  if (pair_acc is not null) then
+  begin
+    tmp_sum = 0;
+    tmp_val = 0;
+    tmp_tax = 0;
+    select kobs_bal_sum, kobs_bal_val, kobs_bal_tax
+    from kn_obsummary
+    where kobs_acc_id = :kob_acc_kt and
+          kobs_date <= :kob_ol_date
+    order by kobs_acc_id desc, kobs_date desc
+    rows 1
+    into tmp_sum, tmp_val, tmp_tax;
+
+    -- если по этому счету нет остатка, проверяем дальше
+    if (tmp_sum = 0 and
+        tmp_val = 0 and
+        tmp_tax = 0) then
+    begin
+      select kobs_bal_sum, kobs_bal_val, kobs_bal_tax
+      from kn_obsummary
+      where kobs_acc_id = :pair_acc and
+            kobs_date <= :kob_ol_date
+      order by kobs_acc_id desc, kobs_date desc
+      rows 1
+      into tmp_sum, tmp_val, tmp_tax;
+
+      -- если прилетел активный счет, меняем его на пассивный (парный)
+      if (acc_type = 0) then
+      begin
+        tmp_acc_id = kob_acc_kt;
+        kob_acc_kt = pair_acc;
+        pair_acc = tmp_acc_id;
+        acc_type = 1;
+      end
+      else
+      begin
+        -- иначе проверяем, если у парного есть остаток, меняем Дт счет на парный.
+        if (tmp_sum <> 0 or
+            tmp_val <> 0 or
+            tmp_tax <> 0) then
+        begin
+          tmp_acc_id = kob_acc_kt;
+          kob_acc_kt = pair_acc;
+          pair_acc = tmp_acc_id;
+          acc_type = 1 - acc_type;
+        end
+      end
+    end
+
+    if (acc_type = 0) then
+    begin
+      if (tmp_sum - kob_summa < 0) then
+      begin
+        kt_pair_dt_acc = kob_acc_kt;
+        kt_pair_kt_acc = pair_acc;
+        kt_amount_sum = -(tmp_sum - kob_summa);
+        kt_amount_val = -(tmp_val - kob_summa_val);
+        kt_amount_tax = -(tmp_tax - kob_summa_tax_kt);
+      end
+    end
+
+    if (acc_type = 1) then
+    begin
+      if (tmp_sum - kob_summa > 0) then
+      begin
+        kt_pair_dt_acc = pair_acc;
+        kt_pair_kt_acc = kob_acc_kt;
+        kt_amount_sum = (tmp_sum - kob_summa);
+        kt_amount_val = (tmp_val - kob_summa_val);
+        kt_amount_tax = (tmp_tax - kob_summa_tax_kt);
+      end
+    end
+  end
+
+  if (kob_detail_str <> '' and
+      kob_detail_str similar to '[-]?[[:DIGIT:]]+') then
+  begin
+    kob_detail_id = kob_detail_str;
+  end
+  else
+  begin
+    kob_detail_id = null;
+    select obd_id
+    from kn_obdetail
+    where obd_detail = :kob_detail_str
+    into :kob_detail_id;
+
+    if (kob_detail_id is null) then
+    begin
+      insert into kn_obdetail (obd_detail)
+      values (:kob_detail_str)
+      returning obd_id
+      into :kob_detail_id;
+    end
+  end
+
+  if (tax_kind_dt = 0) then
+    kob_summa_tax_dt = kob_summa;
+  if (tax_kind_dt = 1) then
+    kob_summa_tax_dt = 0;
+
+  if (tax_kind_kt = 0) then
+    kob_summa_tax_kt = kob_summa;
+  if (tax_kind_kt = 1) then
+    kob_summa_tax_kt = 0;
+
+--  if ((tax_kind_dt = 0 and
+--      tax_kind_kt = 1) or
+--      (tax_kind_dt = 1 and
+--      tax_kind_kt = 0)) then
+--    exception e_default 'Incorrect Dt and Kt tax amount kind. Dt: ' || tax_kind_dt || ', Kt: ' || tax_kind_kt;
+
+  if (tax_kind_dt = 2 and
+      tax_kind_kt in (0, 1)) then
+    kob_summa_tax_dt = kob_summa_tax_kt;
+
+  if (tax_kind_kt = 2 and
+      tax_kind_dt in (0, 1)) then
+    kob_summa_tax_kt = kob_summa_tax_dt;
+
+  if (tax_kind_dt = 2 and
+      tax_kind_kt = 2 and
+      kob_summa <> 0) then
+  begin
+    if (kob_summa_tax_dt <> 0 and
+        kob_summa_tax_dt <> kob_summa) then
+      kob_summa_tax_dt = kob_summa;
+    if (kob_summa_tax_kt <> 0 and
+        kob_summa_tax_kt <> kob_summa) then
+      kob_summa_tax_kt = kob_summa;
+  end
+
+  if (kob_summa <> 0 or
+      kob_summa_val <> 0 or
+      kob_summa_tax_dt <> 0 or
+      kob_summa_tax_kt <> 0) then
+  begin
+    insert into kn_operbook (kob_from_ol_id, kob_currency, kob_curr_rate, kob_acc_dt, kob_acc_kt, kob_summa,
+                             kob_summa_val, kob_summa_tax_dt, kob_summa_tax_kt, kob_ol_date, kob_ol_reg_id,
+                             kob_ol_is_active, kob_detail_id, kob_client_dt, kob_client_kt, kob_from_kc_id)
+    values (:kob_from_ol_id, :kob_currency, :kob_curr_rate, :kob_acc_dt, :kob_acc_kt, :kob_summa, :kob_summa_val,
+            :kob_summa_tax_dt, :kob_summa_tax_kt, :kob_ol_date, :kob_ol_reg_id, :kob_ol_is_active, :kob_detail_id,
+            :kob_client_dt, :kob_client_kt, :kob_from_kc_id);
+  end
+
+  if (dt_pair_dt_acc is not null and
+      dt_pair_kt_acc is not null) then
+  begin
+    kob_detail_id = null;
+    kob_detail_str = 'Кор-ка остатка парных счетов';
+    select obd_id
+    from kn_obdetail
+    where obd_detail = :kob_detail_str
+    into :kob_detail_id;
+
+    if (kob_detail_id is null) then
+    begin
+      insert into kn_obdetail (obd_detail)
+      values (:kob_detail_str)
+      returning obd_id
+      into :kob_detail_id;
+    end
+
+    if (tax_kind_dt = 0) then
+      dt_amount_tax = dt_amount_sum;
+    if (tax_kind_dt = 1) then
+      dt_amount_tax = 0;
+
+    if (dt_amount_sum <> 0 or
+        dt_amount_val <> 0 or
+        dt_amount_tax <> 0) then
+    begin
+      insert into kn_operbook (kob_from_ol_id, kob_currency, kob_curr_rate, kob_acc_dt, kob_acc_kt, kob_summa,
+                               kob_summa_val, kob_summa_tax_dt, kob_summa_tax_kt, kob_ol_date, kob_ol_reg_id,
+                               kob_ol_is_active, kob_detail_id, kob_client_dt, kob_client_kt, kob_from_kc_id)
+      values (:kob_from_ol_id, :kob_currency, :kob_curr_rate, :dt_pair_dt_acc, :dt_pair_kt_acc, :dt_amount_sum,
+              :dt_amount_val, :dt_amount_tax, :dt_amount_tax, -- это не ошибка, строится проводка между парными
+              :kob_ol_date, :kob_ol_reg_id, :kob_ol_is_active, :kob_detail_id, null, null, :kob_from_kc_id);
+    end
+
+    if (tax_kind_kt = 0) then
+      kt_amount_tax = kt_amount_sum;
+    if (tax_kind_kt = 1) then
+      kt_amount_tax = 0;
+
+    if (kt_amount_sum <> 0 or
+        kt_amount_val <> 0 or
+        kt_amount_tax <> 0) then
+    begin
+      insert into kn_operbook (kob_from_ol_id, kob_currency, kob_curr_rate, kob_acc_dt, kob_acc_kt, kob_summa,
+                               kob_summa_val, kob_summa_tax_dt, kob_summa_tax_kt, kob_ol_date, kob_ol_reg_id,
+                               kob_ol_is_active, kob_detail_id, kob_client_dt, kob_client_kt, kob_from_kc_id)
+      values (:kob_from_ol_id, :kob_currency, :kob_curr_rate, :kt_pair_dt_acc, :kt_pair_kt_acc, :kt_amount_sum,
+              :kt_amount_val, :kt_amount_tax, -- это не ошибка, строится проводка между парными
+              :kt_amount_tax, :kob_ol_date, :kob_ol_reg_id, :kob_ol_is_active, :kob_detail_id, null, null,
+              :kob_from_kc_id);
+    end
+  end
+end
+
