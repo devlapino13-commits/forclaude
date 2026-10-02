@@ -1,43 +1,33 @@
 -- ============================================================================
--- 09_taxnsp_nu_bu_20701.sql
--- Настройка НУ=0 (налоговый учёт всегда 0, а не "НУ=БУ") для счёта
--- 207 / 20701 (Цифровой рубль) - по аналогии с уже настроенными 20501 и 20202.
+-- 09_taxnsp_nu_bu_20701.sql  (ред. 2)
+-- Проверка признака налогового учёта (НУ) для счетов 207 / 20701.
 --
--- Справочник: TAXNSP (соотношение сумм БУ/НУ), ключ:
---   TXN_FROM_BG_ID  - балансовая группа (FK -> BALGROUP.BG_ID)
---   TXN_ACC_FROM / TXN_ACC_TILL - диапазон последних цифр лицевого счёта,
---                                  к которому применяется строка
---   TXN_PERCENT     - доля НУ от БУ (0 = НУ никогда не начисляется,
---                      100 = НУ = БУ и т.п.)
--- Судя по всему, ОТСУТСТВИЕ строки в TAXNSP для балгруппы = дефолтное
--- поведение "Всегда НУ = БУ", которое вы и наблюдаете сейчас для 207/20701.
+-- Ред. 1 ошибочно указывала на TAXNSP - это справочник по старым балансовым
+-- группам (BALGROUP), к счетам ЕПС не относится.
+--
+-- Признак "Всегда НУ = БУ / Всегда НУ = 0" хранится в:
+--   REF_ACCBALANCE.AB_TAX_KIND  (балансовый счёт)
+--   SYS_ACCBALANCE.SAB_TAX_KIND (системный счёт; null = брать из балансового)
+-- Значения: 0 - Всегда БУ = НУ, 1 - Всегда НУ = 0, 2 - НУ может отличаться от БУ.
+-- Проводки берут coalesce(sab_tax_kind, ab_tax_kind, 0) (hp_do_kn_operbook_ins).
+-- Нужно: для 207 и 20701 итоговое значение = 1, как у 20501 и 20202.
 -- ============================================================================
 
--- Шаг 1. Смотрим, как это настроено для 20501 и 20202 (эталон) -----------
-SELECT
-    t.txn_from_bg_id,
-    bg.bg_code,          -- если в BALGROUP есть текстовый код счёта - подставится
-    bg.bg_name,
-    t.txn_percent,
-    t.txn_acc_from,
-    t.txn_acc_till
-FROM TAXNSP t
-JOIN BALGROUP bg ON bg.bg_id = t.txn_from_bg_id
-WHERE bg.bg_id STARTING WITH '205.01' OR bg.bg_id STARTING WITH '205-01'
-   OR bg.bg_id STARTING WITH '202.02' OR bg.bg_id STARTING WITH '202-02'
-   OR bg.bg_code = '20501' OR bg.bg_code = '20202'   -- на случай другого формата
-ORDER BY t.txn_from_bg_id, t.txn_acc_from;
+-- 1. Признак на балансовых счетах
+select ab_code, ab_name, ab_tax_kind,
+       case ab_tax_kind when 0 then 'Всегда БУ = НУ'
+                        when 1 then 'Всегда НУ = 0'
+                        when 2 then 'НУ может отличаться' end as tax_kind_name
+from ref_accbalance
+where ab_code in ('207', '20701', '205', '20501', '202', '20202')
+order by ab_code;
 
--- Шаг 2. Смотрим саму балансовую группу для 207/20701 (нужен BG_ID) -------
-SELECT bg_id, bg_code, bg_name
-FROM BALGROUP
-WHERE bg_code STARTING WITH '207' OR bg_id STARTING WITH '207';
+-- 2. Переопределение на системных счетах (должно быть NULL или 1)
+select distinct left(a.acc_code, 5) as bal, s.sab_full_code, s.sab_tax_kind
+from ref_account a
+join sys_accbalance s on s.sab_id = a.acc_from_sab_id
+where a.acc_code starting '20701' or a.acc_code starting '20501' or a.acc_code starting '20202'
+order by 1, 2;
 
--- Шаг 3. Добавляем строку для 207/20701 по результатам шагов 1-2 ---------
--- Подставьте вместо '<BG_ID_207>' точное значение TXN_FROM_BG_ID, которое
--- вы увидели для 20501/20202 в шаге 1 (у 207 должен быть такой же формат),
--- и вместо диапазона ACC_FROM/ACC_TILL - те же границы, что у эталонных
--- строк (обычно 0..999999 - "весь диапазон лицевых счетов группы").
---
--- INSERT INTO TAXNSP (TXN_FROM_BG_ID, TXN_PERCENT, TXN_ACC_FROM, TXN_ACC_TILL)
--- VALUES ('<BG_ID_207>', 0, 0, 999999);
+-- 3. Исправление, если для 207 / 20701 стоит 0 (выполнять только после проверки п.1)
+-- update ref_accbalance set ab_tax_kind = 1 where ab_code in ('207', '20701') and ab_tax_kind <> 1;
