@@ -1,10 +1,12 @@
--- RFCRU-6015 (ред. 4): рекомендуемый платёж при просрочке.
+-- RFCRU-6015 (ред. 5): рекомендуемый платёж при просрочке.
 -- Исправлено относительно ред. 1:
 --   1) "просрочки нет, есть только пеня" -> пеня + ближайший платёж без условия 10 дней (раньше ближайший отсекался окном);
 --   2) окно "10 и менее календарных дней" = next_sh_date - rep_date <= 10 (раньше rep_date + 9, т.е. <= 9);
 --   3) пеня по просроченным платежам включается всегда, в т.ч. при > 10 днях до ближайшего платежа
 --      (ред. 4: заказчик считает пеню частью просроченной суммы - Муминова 3 872 + 2 = 3 874,
 --      Музаффаров 14 817 + 9 + 8 = 14 834; в ред. 3 пеня при > 10 днях не бралась).
+-- Новая логика - только для РФ (db_id = 81001), как в RFCRU-4811; для остальных баз (кроме КЗ/КГ)
+-- оставлено прежнее окно rep_date + 9 (ред. 5).
 -- Ветки КЗ/КГ, расторжения и "нет просрочки" не менялись.
 
 create or alter procedure get_recommended_pay_sum (
@@ -97,34 +99,47 @@ begin
     else
     if (min_sh_date < rep_date or min_sh_date is null) then
     begin
-      -- RFCRU-6015 ред. 4: рекомендуемый платёж при наличии просрочки/пени
-      --   есть просрочка (ОД/%), до ближайшего платежа > 10 дней:  просрочка + пеня
-      --   есть просрочка (ОД/%), до ближайшего платежа <= 10 дней: просрочка + пеня + ближайший платёж
-      --   просрочки (ОД/%) нет, есть только пеня:                  пеня + ближайший платёж (без условия 10 дней)
+      -- RFCRU-6015 ред. 5: новая логика только для РФ (как и RFCRU-4811); остальные базы - прежнее окно +9 дней
+      if (db_id = 81001) then
+      begin
+        -- RFCRU-6015 ред. 4: рекомендуемый платёж при наличии просрочки/пени
+        --   есть просрочка (ОД/%), до ближайшего платежа > 10 дней:  просрочка + пеня
+        --   есть просрочка (ОД/%), до ближайшего платежа <= 10 дней: просрочка + пеня + ближайший платёж
+        --   просрочки (ОД/%) нет, есть только пеня:                  пеня + ближайший платёж (без условия 10 дней)
 
-      -- просроченная часть: платежи с датой до даты отчёта (и строки без даты)
-      select sum(zad_os + sh_calc_perc + zad_kommis), sum(sh_calc_fine)
-      from aarep_make_zad_list(:k_id, :rep_date, 1)
-      where coalesce(sh_date, '01.01.1900') < :rep_date
-      into delinq_body, delinq_fine;
-      delinq_body = coalesce(delinq_body, 0);
-      delinq_fine = coalesce(delinq_fine, 0);
+        -- просроченная часть: платежи с датой до даты отчёта (и строки без даты)
+        select sum(zad_os + sh_calc_perc + zad_kommis), sum(sh_calc_fine)
+        from aarep_make_zad_list(:k_id, :rep_date, 1)
+        where coalesce(sh_date, '01.01.1900') < :rep_date
+        into delinq_body, delinq_fine;
+        delinq_body = coalesce(delinq_body, 0);
+        delinq_fine = coalesce(delinq_fine, 0);
 
-      -- ближайший платёж по графику (сегодня или позже)
-      next_sh_date = null;
-      next_pay_sum = 0;
-      select first 1 sh_date, zad_os + zad_perc + sh_calc_fine + zad_kommis
-      from aarep_make_zad_list(:k_id, :rep_date, 1)
-      where sh_date >= :rep_date
-      order by sh_date
-      into next_sh_date, next_pay_sum;
-      next_pay_sum = coalesce(next_pay_sum, 0);
+        -- ближайший платёж по графику (сегодня или позже)
+        next_sh_date = null;
+        next_pay_sum = 0;
+        select first 1 sh_date, zad_os + zad_perc + sh_calc_fine + zad_kommis
+        from aarep_make_zad_list(:k_id, :rep_date, 1)
+        where sh_date >= :rep_date
+        order by sh_date
+        into next_sh_date, next_pay_sum;
+        next_pay_sum = coalesce(next_pay_sum, 0);
 
-      if (delinq_body > 0) then
-        recom_pay_sum = delinq_body + delinq_fine +
-                        iif(next_sh_date is not null and next_sh_date - rep_date <= 10, next_pay_sum, 0);
+        if (delinq_body > 0) then
+          recom_pay_sum = delinq_body + delinq_fine +
+                          iif(next_sh_date is not null and next_sh_date - rep_date <= 10, next_pay_sum, 0);
+        else
+          recom_pay_sum = delinq_fine + next_pay_sum;
+      end
       else
-        recom_pay_sum = delinq_fine + next_pay_sum;
+      begin
+        rep_date_limit = rep_date + 9;
+
+        select sum(zad_os + iif(coalesce(sh_date, :rep_date) <= :rep_date, sh_calc_perc, zad_perc) + sh_calc_fine + zad_kommis)
+        from aarep_make_zad_list(:k_id, :rep_date, 1)
+        where coalesce(sh_date, :rep_date_limit) <= :rep_date_limit
+        into recom_pay_sum;
+      end
     end
     else
       select zad_os + zad_perc
