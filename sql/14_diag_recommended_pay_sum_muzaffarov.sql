@@ -1,7 +1,7 @@
 -- RFCRU-6015: диагностика рекомендуемого платежа по договору 0119-1055384-11 (Музаффаров).
 
 -- 1. Какая версия процедуры стоит на базе
-select iif(rdb$procedure_source containing 'ред. 3', 'ред. 3 (Claude)',
+select iif(rdb$procedure_source containing 'delinq_body', 'ред. 3 (Claude)',
        iif(rdb$procedure_source containing 'RFCRU-6015', 'новая (6015, 92a6cb2c)',
        iif(rdb$procedure_source containing 'RFCRU-4811', 'старая (4811)', '?'))) as version
 from rdb$procedures
