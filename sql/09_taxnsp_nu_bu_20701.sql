@@ -29,5 +29,25 @@ join sys_accbalance s on s.sab_id = a.acc_from_sab_id
 where a.acc_code starting '20701' or a.acc_code starting '20501' or a.acc_code starting '20202'
 order by 1, 2;
 
--- 3. Исправление, если для 207 / 20701 стоит 0 (выполнять только после проверки п.1)
--- update ref_accbalance set ab_tax_kind = 1 where ab_code in ('207', '20701') and ab_tax_kind <> 1;
+-- Результат проверки 02.10.2026:
+--   REF_ACCBALANCE: 20501 = 1, 20701 = 1, 20202 = 0, группы 202/205/207 = 0
+--   SYS_ACCBALANCE: Деньги.Нал.Касса = 0, Деньги.Безнал.Банк.РасчСчет = 0,
+--                   Деньги.Безнал.Банк.ЦифрСчет = 0
+--   => SAB_TAX_KIND = 0 перекрывает балансовый признак: фактически для 20202,
+--      20501 и 20701 сейчас "НУ = БУ".
+--
+-- 3. Исправление (после согласования с бухгалтерией: затрагивает ВСЕ лицевые
+--    счета этих системных счетов; действует на новые проводки, старые
+--    KN_OPERBOOK не пересчитываются)
+-- update sys_accbalance
+-- set sab_tax_kind = 1
+-- where sab_full_code in ('Деньги.Нал.Касса',
+--                         'Деньги.Безнал.Банк.РасчСчет',
+--                         'Деньги.Безнал.Банк.ЦифрСчет')
+--   and coalesce(sab_tax_kind, -1) <> 1;
+
+-- 4. Проверка привязки 53-01/1 к счёту 20701 (п.1 ТЗ)
+select al_id, al_account, al_from_acc_id, a.acc_code, a.acc_name
+from acc_list
+left join ref_account a on a.acc_id = al_from_acc_id
+where al_account = '53-01/1';
