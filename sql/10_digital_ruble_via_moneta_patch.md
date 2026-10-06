@@ -1,4 +1,9 @@
-# Правка HP_EXTSYS_PROCESS_ONE — ЦР через существующий проект `moneta`
+# Правка HP_EXTSYS_PROCESS_ONE — ЦР через существующие MNT-проекты (`moneta` / `wirebank`)
+
+Ред. 3 (06.10.2026) — тестовый платёж ЦР (транзакция 1791279466487089597)
+пришёл с `esm_project = 'wirebank'`, а не `moneta`. В правке 1 убрано условие
+по проекту: признак ЦР — только `MNT_PAYMENT_METHOD = cr`, из какого бы
+MNT-проекта он ни пришёл. Остальное без изменений.
 
 Ред. 2 (01.10.2026) — исправлены две ошибки первой редакции, см. «Что
 изменилось» внизу.
@@ -37,9 +42,9 @@ declare variable payment_method d_str_20;
     if (rep_rus_name = '') then
       exit;
 
-    -- RFCRU-5822: Цифровой рубль приходит как moneta + MNT_PAYMENT_METHOD = 'cr'
+    -- RFCRU-5822: Цифровой рубль - MNT_PAYMENT_METHOD = 'cr' (приходит через moneta / wirebank)
     payment_method = '';
-    if (db_id = 81001 and esm_project = 'moneta') then
+    if (db_id = 81001) then
     begin
       select field_value
       from hp_extsys_parcer(:esm_full_source, 'MNT_PAYMENT_METHOD')
@@ -129,6 +134,15 @@ declare variable payment_method d_str_20;
 - `HP_EXTSYS_PAY` — `moneta` уже во всех нужных списках.
 - `EXTSYSPRO` — строку `moneta` не меняем.
 - `MNT_PAYMENT_METHOD = 'sbp'` / `'card'` — поведение без изменений.
+
+## Что изменилось в ред. 3
+
+Правка 1: `if (db_id = 81001 and esm_project = 'moneta')` → `if (db_id = 81001)`.
+На тесте ЦР пришёл как `wirebank`; со старым условием платёж прошёл бы как
+обычный Wirebank (счёт проекта, для Oivo — 51-01/26) с комиссией по MNT_FEE.
+В источниках без `MNT_PAYMENT_METHOD` парсер вернёт пусто — поведение не меняется.
+Правки 0, 2, 3 — без изменений (комиссионный блок общий для moneta/wirebank,
+счёт комиссии и вид счёта 2 сохраняются).
 
 ## Что изменилось относительно ред. 1
 

@@ -2,11 +2,12 @@
 -- 15_digital_ruble_test_payment_check.sql
 -- RFCRU-5822: проверка тестового платежа ЦР (тестовая БД).
 -- Транзакция 1791279466487089597, 100 руб., K_ID 1010101195843003 01,
--- MNT_PAYMENT_METHOD=cr, MNT_FEE=0.00.
+-- MNT_PAYMENT_METHOD=cr, MNT_FEE=0.00, esm_project = wirebank.
+-- Запросы 2-6 вернут пусто, пока pay в статусе 0 (не обработан).
 -- Только SELECT, ничего не меняет. Для другого платежа заменить trans_id во всех запросах.
 -- ============================================================================
 
--- 1. Платёж в EXTSYSMAIN: должен быть pay со статусом 1 (обработан), проект moneta,
+-- 1. Платёж в EXTSYSMAIN: должен быть pay со статусом 1 (обработан), проект wirebank/moneta,
 --    payment_method = cr.
 select e.esm_id, e.esm_action, e.esm_status, e.esm_project, e.esm_from_k_id, e.esm_amount,
        (select field_value from hp_extsys_parcer(e.esm_full_source, 'MNT_PAYMENT_METHOD')) as payment_method,
@@ -93,7 +94,7 @@ where k.kob_ol_date = current_date   -- дата платежа
   and (a_dt.acc_code starting '20701' or a_kt.acc_code starting '20701')
 group by 1, 2;
 
--- 8. Для сравнения: последние обычные платежи moneta (не ЦР) - у них Дт должен остаться
+-- 8. Для сравнения: последние обычные платежи moneta/wirebank (не ЦР) - у них Дт должен остаться
 --    прежний счёт (ESP_ACCOUNT_NO проекта / 51-01/24 / 51-01/26) и комиссия по MNT_FEE.
 select first 5 e.esm_trans_id, e.esm_amount,
        (select field_value from hp_extsys_parcer(e.esm_full_source, 'MNT_PAYMENT_METHOD')) as payment_method,
@@ -103,7 +104,7 @@ from extsysmain e
 join extsysoper eso on eso.eso_from_esm_id = e.esm_id
 join operbook ob on ob.ob_from_ol_id = eso.eso_from_ol_id
 left join acc_list al_dt on al_dt.al_id = ob.ob_account_dt
-where e.esm_project = 'moneta'
+where e.esm_project in ('moneta', 'wirebank')
   and e.esm_action = 'pay'
   and e.esm_status = 1
   and e.esm_trans_id <> '1791279466487089597'
